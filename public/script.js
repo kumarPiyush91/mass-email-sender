@@ -17,7 +17,7 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
         const emails = csvData.split('\n').filter(line => line.trim()).length - 1;
         totalEmails.textContent = emails;
         console.log(`[Debug] Client-side: Total emails detected: ${emails}`);
-        console.log(`[Debug] CSV preview: ${csvData.slice(0, 100)}...`);
+        console.log(`[Debug] CSV preview: ${csvData.slice(0, 200)}...`);
 
         try {
             const response = await fetch('/send-emails', {
@@ -48,7 +48,7 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
                         const [_, count, email, ...errorParts] = data.split(':');
                         const errorMsg = errorParts.join(':');
                         console.error(`[Client Error] ${email}: ${errorMsg}`);
-                        report.textContent += `Error sending to ${email}: ${errorMsg}\n`;
+                        report.textContent += `Error: ${errorMsg}\n`;
                     } else if (data.startsWith('Completed')) {
                         const [_, sent, failed] = data.split(':');
                         report.textContent += `Completed! Sent: ${sent}, Failed: ${failed}\n`;
@@ -59,7 +59,7 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
                 report.scrollTop = report.scrollHeight;
             }
         } catch (err) {
-            console.error(`[Client Error] ${err.message}`);
+            console.error(`[Client Error] Fetch failed: ${err.message}`);
             report.textContent += `Client-side error: ${err.message}\n`;
         }
     };

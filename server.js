@@ -72,7 +72,9 @@ const uploadImageToS3 = async (base64Data) => {
 // Email validation function
 const isValidEmail = (email) => {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return email && typeof email === 'string' && emailRegex.test(email.trim());
+    const isValid = email && typeof email === 'string' && emailRegex.test(email.trim());
+    if (!isValid) console.log(`[Debug] Invalid email rejected: ${email}`);
+    return isValid;
 };
 
 // Batch processing function (12 emails/sec)
@@ -145,20 +147,21 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
     res.write(`data:Completed:${sentCount}:${errors.length}\n\n`);
     console.log(`[Batch Complete] Sent: ${sentCount}, Failed: ${errors.length}`);
     if (errors.length) console.error(`[Batch Errors] ${JSON.stringify(errors, null, 2)}`);
-    res.end(); // Ensure stream closes properly
+    res.end();
 };
 
 // Endpoint to handle email sending
 app.post('/send-emails', (req, res) => {
     const { subject, htmlContent, csvFile } = req.body;
     try {
-        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 100)}...`);
-        const parsed = parse(csvFile, { columns: true, trim: true });
+        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 200)}...`); // More characters for clarity
+        const parsed = parse(csvFile, { columns: true, trim: true, skip_empty_lines: true });
         console.log(`[Debug] Parsed rows: ${JSON.stringify(parsed.slice(0, 5), null, 2)}`);
 
+        // Try multiple column name variations
         const recipients = parsed
             .map(row => {
-                const email = row.email || row.Email || row.EMAIL || row.emails; // Handle common column name variations
+                const email = row.email || row.Email || row.EMAIL || row.emails || row['e-mail'];
                 return email ? email.trim() : null;
             })
             .filter(email => isValidEmail(email));
@@ -178,7 +181,9 @@ app.post('/send-emails', (req, res) => {
         sendEmailsInBatches(recipients, subject, htmlContent, res);
     } catch (err) {
         console.error(`[CSV Parse Error] ${err.message}`);
-        res.status(500).send('Error parsing CSV');
+        res.write(`data:Error:0:CSV parsing failed: ${err.message}\n\n`);
+        res.write(`data:Completed:0:0\n\n`);
+        res.end();
     }
 });
 
