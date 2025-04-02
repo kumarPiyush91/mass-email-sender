@@ -23,7 +23,7 @@ app.get('/', (_, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Email Sender</title>
+        <title>mass-Email Sender</title>
         <link rel="stylesheet" href="/style.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.7.1/tinymce.min.js"></script>
     </head>
