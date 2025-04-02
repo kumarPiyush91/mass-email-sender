@@ -23,7 +23,7 @@ app.get('/', (_, res) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>mass-Email Sender</title>
+        <title>Email Sender</title>
         <link rel="stylesheet" href="/style.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tinymce/6.7.1/tinymce.min.js"></script>
     </head>
@@ -107,7 +107,7 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
                 const errorMsg = `Invalid email format: ${email}`;
                 console.error(`[Error] ${errorMsg}`);
                 errors.push({ email, error: errorMsg });
-                res.write(`data:Error:${sentCount}:${errorMsg}\n\n`);
+                res.write(`data:Error:${sentCount}:${email}:${errorMsg}\n\n`);
                 return;
             }
 
@@ -151,11 +151,15 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
 app.post('/send-emails', (req, res) => {
     const { subject, htmlContent, csvFile } = req.body;
     try {
-        const recipients = parse(csvFile, { columns: true })
+        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 100)}...`); // Log raw CSV
+        const parsed = parse(csvFile, { columns: true });
+        console.log(`[Debug] Parsed rows: ${JSON.stringify(parsed.slice(0, 5), null, 2)}`);
+
+        const recipients = parsed
             .map(row => row.email ? row.email.trim() : null)
             .filter(email => isValidEmail(email));
-        console.log(`[Debug] Parsed ${recipients.length} valid emails from CSV: ${recipients.slice(0, 5)}...`);
-        
+        console.log(`[Debug] Parsed ${recipients.length} valid emails: ${recipients.slice(0, 5)}...`);
+
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');

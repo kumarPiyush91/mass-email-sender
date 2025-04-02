@@ -14,9 +14,10 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
     const reader = new FileReader();
     reader.onload = async (event) => {
         const csvData = event.target.result;
-        const emails = csvData.split('\n').filter(line => line.trim()).length - 1; // Subtract header
+        const emails = csvData.split('\n').filter(line => line.trim()).length - 1;
         totalEmails.textContent = emails;
         console.log(`[Debug] Client-side: Total emails detected: ${emails}`);
+        console.log(`[Debug] CSV preview: ${csvData.slice(0, 100)}...`);
 
         try {
             const response = await fetch('/send-emails', {
