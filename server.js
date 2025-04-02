@@ -69,9 +69,9 @@ const uploadImageToS3 = async (base64Data) => {
     }
 };
 
-// Batch processing function (50 emails/sec for production)
+// Batch processing function (12 emails/sec)
 const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
-    const batchSize = 50;
+    const batchSize = 12; // 12 emails per batch
     let sentCount = 0;
     const errors = [];
 
@@ -94,7 +94,7 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
         const batch = recipients.slice(i, i + batchSize);
         const promises = batch.map(async (email) => {
             const unsubscribeId = `${email}-${Date.now()}`;
-            const unsubscribeLink = `${process.env.BASE_URL || 'https://email-marketing-backend.up.railway.app'}/unsubscribe?id=${unsubscribeId}`;
+            const unsubscribeLink = `${process.env.BASE_URL || 'https://mass-email-sender-whyh.onrender.com'}/unsubscribe?id=${unsubscribeId}`;
             const fullHtml = `${updatedHtmlContent}<br><br><p>If you don't find this email useful, please <a href="${unsubscribeLink}">unsubscribe</a></p>`;
 
             const params = {
@@ -118,7 +118,7 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
         });
 
         await Promise.all(promises);
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 1000ms = 1 second delay
     }
 
     res.write(`data:Completed:${sentCount}:${errors.length}\n\n`);
