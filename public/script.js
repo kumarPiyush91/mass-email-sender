@@ -16,38 +16,48 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
         const csvData = event.target.result;
         const emails = csvData.split('\n').filter(line => line.trim()).length - 1; // Subtract header
         totalEmails.textContent = emails;
+        console.log(`[Debug] Client-side: Total emails detected: ${emails}`);
 
-        const response = await fetch('/send-emails', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subject, htmlContent, csvFile: csvData }),
-        });
+        try {
+            const response = await fetch('/send-emails', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ subject, htmlContent, csvFile: csvData }),
+            });
 
-        const readerStream = response.body.getReader();
-        const decoder = new TextDecoder();
-        while (true) {
-            const { done, value } = await readerStream.read();
-            if (done) break;
-            const message = decoder.decode(value).trim();
-            const parts = message.split(':');
-
-            if (parts[0] === 'data') {
-                const data = parts.slice(1).join(':');
-                if (data.startsWith('Sent')) {
-                    const [_, count, email] = data.split(':');
-                    sentEmails.textContent = count; // Update sent count
-                    report.textContent += `Sent to ${email}\n`;
-                } else if (data.startsWith('Error')) {
-                    const [_, count, email, ...errorParts] = data.split(':');
-                    report.textContent += `Error sending to ${email}: ${errorParts.join(':')}\n`;
-                } else if (data.startsWith('Completed')) {
-                    const [_, sent, failed] = data.split(':');
-                    report.textContent += `Completed! Sent: ${sent}, Failed: ${failed}\n`;
-                } else if (data.startsWith('Total emails to send')) {
-                    report.textContent += `${data}\n`;
-                }
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
             }
-            report.scrollTop = report.scrollHeight;
+
+            const readerStream = response.body.getReader();
+            const decoder = new TextDecoder();
+            while (true) {
+                const { done, value } = await readerStream.read();
+                if (done) break;
+                const message = decoder.decode(value).trim();
+                const parts = message.split(':');
+
+                if (parts[0] === 'data') {
+                    const data = parts.slice(1).join(':');
+                    if (data.startsWith('Sent')) {
+                        const [_, count, email] = data.split(':');
+                        sentEmails.textContent = count;
+                        report.textContent += `Sent to ${email}\n`;
+                    } else if (data.startsWith('Error')) {
+                        const [_, count, email, ...errorParts] = data.split(':');
+                        report.textContent += `Error sending to ${email}: ${errorParts.join(':')}\n`;
+                    } else if (data.startsWith('Completed')) {
+                        const [_, sent, failed] = data.split(':');
+                        report.textContent += `Completed! Sent: ${sent}, Failed: ${failed}\n`;
+                    } else if (data.startsWith('Total emails to send')) {
+                        report.textContent += `${data}\n`;
+                    }
+                }
+                report.scrollTop = report.scrollHeight;
+            }
+        } catch (err) {
+            console.error(`[Client Error] ${err.message}`);
+            report.textContent += `Client-side error: ${err.message}\n`;
         }
     };
     reader.readAsText(csvFile);

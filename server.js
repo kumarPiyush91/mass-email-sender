@@ -69,11 +69,19 @@ const uploadImageToS3 = async (base64Data) => {
     }
 };
 
+// Email validation function
+const isValidEmail = (email) => {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return email && typeof email === 'string' && emailRegex.test(email.trim());
+};
+
 // Batch processing function (12 emails/sec)
 const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
-    const batchSize = 12; // 12 emails per batch
+    const batchSize = 12;
     let sentCount = 0;
     const errors = [];
+
+    console.log(`[Debug] Starting batch process with ${recipients.length} recipients`);
 
     let updatedHtmlContent = htmlContent;
     const base64Regex = /<img[^>]+src=["'](data:image\/\w+;base64,[^"']+)["']/g;
@@ -92,7 +100,17 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
 
     for (let i = 0; i < recipients.length; i += batchSize) {
         const batch = recipients.slice(i, i + batchSize);
+        console.log(`[Debug] Processing batch ${i / batchSize + 1}: ${batch.join(', ')}`);
+
         const promises = batch.map(async (email) => {
+            if (!isValidEmail(email)) {
+                const errorMsg = `Invalid email format: ${email}`;
+                console.error(`[Error] ${errorMsg}`);
+                errors.push({ email, error: errorMsg });
+                res.write(`data:Error:${sentCount}:${errorMsg}\n\n`);
+                return;
+            }
+
             const unsubscribeId = `${email}-${Date.now()}`;
             const unsubscribeLink = `${process.env.BASE_URL || 'https://mass-email-sender-whyh.onrender.com'}/unsubscribe?id=${unsubscribeId}`;
             const fullHtml = `${updatedHtmlContent}<br><br><p>If you don't find this email useful, please <a href="${unsubscribeLink}">unsubscribe</a></p>`;
@@ -107,30 +125,37 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
                 ConfigurationSetName: 'EmailTrackingConfig',
             };
 
+            console.log(`[Debug] Sending to ${email} with Source: ${process.env.SES_SENDER_EMAIL}`);
+
             try {
                 await sesClient.send(new SendEmailCommand(params));
                 sentCount++;
-                res.write(`data:Sent:${sentCount}\n\n`);
+                res.write(`data:Sent:${sentCount}:${email}\n\n`);
             } catch (err) {
+                console.error(`[SES Error] Email: ${email}, Error: ${err.message}`);
                 errors.push({ email, error: err.message });
-                res.write(`data:Error:${sentCount}:${err.message}\n\n`);
+                res.write(`data:Error:${sentCount}:${email}:${err.message}\n\n`);
             }
         });
 
         await Promise.all(promises);
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 1000ms = 1 second delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
     res.write(`data:Completed:${sentCount}:${errors.length}\n\n`);
     console.log(`[Batch Complete] Sent: ${sentCount}, Failed: ${errors.length}`);
-    if (errors.length) console.error(`[Batch Errors] ${JSON.stringify(errors)}`);
+    if (errors.length) console.error(`[Batch Errors] ${JSON.stringify(errors, null, 2)}`);
 };
 
 // Endpoint to handle email sending
 app.post('/send-emails', (req, res) => {
     const { subject, htmlContent, csvFile } = req.body;
     try {
-        const recipients = parse(csvFile, { columns: true }).map(row => row.email);
+        const recipients = parse(csvFile, { columns: true })
+            .map(row => row.email ? row.email.trim() : null)
+            .filter(email => isValidEmail(email));
+        console.log(`[Debug] Parsed ${recipients.length} valid emails from CSV: ${recipients.slice(0, 5)}...`);
+        
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
