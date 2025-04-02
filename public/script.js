@@ -27,7 +27,7 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
             });
 
             if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+                throw new Error(`Server responded with status: ${response.status}`);
             }
 
             const readerStream = response.body.getReader();
@@ -42,11 +42,13 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
                     const data = parts.slice(1).join(':');
                     if (data.startsWith('Sent')) {
                         const [_, count, email] = data.split(':');
-                        sentEmails.textContent = count;
+                        sentEmails.textContent = count; // Live update
                         report.textContent += `Sent to ${email}\n`;
                     } else if (data.startsWith('Error')) {
                         const [_, count, email, ...errorParts] = data.split(':');
-                        report.textContent += `Error sending to ${email}: ${errorParts.join(':')}\n`;
+                        const errorMsg = errorParts.join(':');
+                        console.error(`[Client Error] ${email}: ${errorMsg}`);
+                        report.textContent += `Error sending to ${email}: ${errorMsg}\n`;
                     } else if (data.startsWith('Completed')) {
                         const [_, sent, failed] = data.split(':');
                         report.textContent += `Completed! Sent: ${sent}, Failed: ${failed}\n`;
@@ -60,6 +62,10 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
             console.error(`[Client Error] ${err.message}`);
             report.textContent += `Client-side error: ${err.message}\n`;
         }
+    };
+    reader.onerror = (err) => {
+        console.error(`[File Read Error] ${err.message}`);
+        report.textContent += `Error reading file: ${err.message}\n`;
     };
     reader.readAsText(csvFile);
 });

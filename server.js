@@ -145,20 +145,32 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
     res.write(`data:Completed:${sentCount}:${errors.length}\n\n`);
     console.log(`[Batch Complete] Sent: ${sentCount}, Failed: ${errors.length}`);
     if (errors.length) console.error(`[Batch Errors] ${JSON.stringify(errors, null, 2)}`);
+    res.end(); // Ensure stream closes properly
 };
 
 // Endpoint to handle email sending
 app.post('/send-emails', (req, res) => {
     const { subject, htmlContent, csvFile } = req.body;
     try {
-        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 100)}...`); // Log raw CSV
-        const parsed = parse(csvFile, { columns: true });
+        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 100)}...`);
+        const parsed = parse(csvFile, { columns: true, trim: true });
         console.log(`[Debug] Parsed rows: ${JSON.stringify(parsed.slice(0, 5), null, 2)}`);
 
         const recipients = parsed
-            .map(row => row.email ? row.email.trim() : null)
+            .map(row => {
+                const email = row.email || row.Email || row.EMAIL || row.emails; // Handle common column name variations
+                return email ? email.trim() : null;
+            })
             .filter(email => isValidEmail(email));
         console.log(`[Debug] Parsed ${recipients.length} valid emails: ${recipients.slice(0, 5)}...`);
+
+        if (recipients.length === 0) {
+            console.error('[Error] No valid emails found in CSV');
+            res.write(`data:Error:0:No valid emails found in CSV\n\n`);
+            res.write(`data:Completed:0:0\n\n`);
+            res.end();
+            return;
+        }
 
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
