@@ -7,9 +7,11 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
     const report = document.getElementById('report');
     const totalEmails = document.getElementById('totalEmails');
     const sentEmails = document.getElementById('sentEmails');
+    const failedEmails = document.getElementById('failedEmails');
 
     report.textContent = 'Sending emails...\n';
     sentEmails.textContent = '0';
+    failedEmails.textContent = '0';
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -41,19 +43,27 @@ document.getElementById('emailForm').addEventListener('submit', async (e) => {
                 if (parts[0] === 'data') {
                     const data = parts.slice(1).join(':');
                     if (data.startsWith('Sent')) {
-                        const [_, count, email] = data.split(':');
-                        sentEmails.textContent = count; // Live update
-                        report.textContent += `Sent to ${email}\n`;
-                    } else if (data.startsWith('Error')) {
-                        const [_, count, email, ...errorParts] = data.split(':');
+                        const [_, sent, failed] = data.split(':');
+                        sentEmails.textContent = sent; // Live update
+                        failedEmails.textContent = failed;
+                        report.textContent += `Sent count: ${sent}, Failed count: ${failed}\n`;
+                    } else if (data.startsWith('Failed')) {
+                        const [_, sent, failed, ...errorParts] = data.split(':');
                         const errorMsg = errorParts.join(':');
-                        console.error(`[Client Error] ${email}: ${errorMsg}`);
-                        report.textContent += `Error: ${errorMsg}\n`;
+                        console.error(`[Client Error] Failed: ${errorMsg}`);
+                        sentEmails.textContent = sent;
+                        failedEmails.textContent = failed;
+                        report.textContent += `Failed count: ${failed} - ${errorMsg}\n`;
                     } else if (data.startsWith('Completed')) {
                         const [_, sent, failed] = data.split(':');
                         report.textContent += `Completed! Sent: ${sent}, Failed: ${failed}\n`;
                     } else if (data.startsWith('Total emails to send')) {
                         report.textContent += `${data}\n`;
+                    } else if (data.startsWith('Error')) {
+                        const [_, count, ...errorParts] = data.split(':');
+                        const errorMsg = errorParts.join(':');
+                        console.error(`[Client Error] ${errorMsg}`);
+                        report.textContent += `Error: ${errorMsg}\n`;
                     }
                 }
                 report.scrollTop = report.scrollHeight;

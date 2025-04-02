@@ -41,6 +41,7 @@ app.get('/', (_, res) => {
         <h3>Live Report</h3>
         <div>Total Emails: <span id="totalEmails">0</span></div>
         <div>Sent Emails: <span id="sentEmails">0</span></div>
+        <div>Failed Emails: <span id="failedEmails">0</span></div>
         <pre id="report"></pre>
         <script src="/script.js"></script>
     </body>
@@ -81,7 +82,7 @@ const isValidEmail = (email) => {
 const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
     const batchSize = 12;
     let sentCount = 0;
-    const errors = [];
+    let failedCount = 0;
 
     console.log(`[Debug] Starting batch process with ${recipients.length} recipients`);
 
@@ -108,8 +109,8 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
             if (!isValidEmail(email)) {
                 const errorMsg = `Invalid email format: ${email}`;
                 console.error(`[Error] ${errorMsg}`);
-                errors.push({ email, error: errorMsg });
-                res.write(`data:Error:${sentCount}:${email}:${errorMsg}\n\n`);
+                failedCount++;
+                res.write(`data:Failed:${sentCount}:${failedCount}:${errorMsg}\n\n`);
                 return;
             }
 
@@ -132,11 +133,12 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
             try {
                 await sesClient.send(new SendEmailCommand(params));
                 sentCount++;
-                res.write(`data:Sent:${sentCount}:${email}\n\n`);
+                console.log(`[Success] Sent to ${email}`);
+                res.write(`data:Sent:${sentCount}:${failedCount}\n\n`);
             } catch (err) {
                 console.error(`[SES Error] Email: ${email}, Error: ${err.message}`);
-                errors.push({ email, error: err.message });
-                res.write(`data:Error:${sentCount}:${email}:${err.message}\n\n`);
+                failedCount++;
+                res.write(`data:Failed:${sentCount}:${failedCount}:${err.message}\n\n`);
             }
         });
 
@@ -144,9 +146,8 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    res.write(`data:Completed:${sentCount}:${errors.length}\n\n`);
-    console.log(`[Batch Complete] Sent: ${sentCount}, Failed: ${errors.length}`);
-    if (errors.length) console.error(`[Batch Errors] ${JSON.stringify(errors, null, 2)}`);
+    res.write(`data:Completed:${sentCount}:${failedCount}\n\n`);
+    console.log(`[Batch Complete] Sent: ${sentCount}, Failed: ${failedCount}`);
     res.end();
 };
 
@@ -154,11 +155,10 @@ const sendEmailsInBatches = async (recipients, subject, htmlContent, res) => {
 app.post('/send-emails', (req, res) => {
     const { subject, htmlContent, csvFile } = req.body;
     try {
-        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 200)}...`); // More characters for clarity
+        console.log(`[Debug] Raw CSV data: ${csvFile.slice(0, 200)}...`);
         const parsed = parse(csvFile, { columns: true, trim: true, skip_empty_lines: true });
         console.log(`[Debug] Parsed rows: ${JSON.stringify(parsed.slice(0, 5), null, 2)}`);
 
-        // Try multiple column name variations
         const recipients = parsed
             .map(row => {
                 const email = row.email || row.Email || row.EMAIL || row.emails || row['e-mail'];
